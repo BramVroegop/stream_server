@@ -1,19 +1,20 @@
 use std::{
     io::{self, Read, Write},
     net::TcpStream,
+    str::Chars,
     time::Duration,
 };
 
 #[derive(Debug)]
 struct StreamFrameResult {
-    x: i32,
-    y: i32,
-    z: i32,
+    _x: i32,
+    _y: i32,
+    _z: i32,
 }
 
 impl StreamFrameResult {
-    fn new(x: i32, y: i32, z: i32) -> Self {
-        Self { x, y, z }
+    fn new(_x: i32, _y: i32, _z: i32) -> Self {
+        Self { _x, _y, _z }
     }
 }
 
@@ -25,6 +26,45 @@ struct Client {
 impl Client {
     fn new(ip: String, port: u16) -> Self {
         Self { ip, port }
+    }
+
+    fn _get_message_length(
+        &self,
+        it: &mut Chars<'_>,
+        msg_len: &mut Option<usize>,
+        msg_len_str: &mut String,
+    ) {
+        while let Some(nn) = it.next() {
+            if nn != '\n' {
+                msg_len_str.push(nn);
+                continue;
+            }
+
+            let len_str = msg_len_str.split(":").last().unwrap_or("0");
+            *msg_len = Some(len_str.parse::<usize>().unwrap());
+            msg_len_str.clear();
+            break;
+        }
+    }
+
+    fn _get_values(&self, sit: &mut Chars<'_>) -> [i32; 3] {
+        let mut values = [0; 3];
+        let mut i = 0;
+        while let Some(nn) = sit.next() {
+            if nn == ':' {
+                let mut value_str = String::new();
+
+                while let Some(nnn) = sit.next() {
+                    if nnn == ',' {
+                        break;
+                    }
+                    value_str.push(nnn);
+                }
+                values[i] = value_str.parse::<i32>().unwrap();
+                i += 1;
+            }
+        }
+        values
     }
 
     fn start(&self, cb: fn(frame: StreamFrameResult)) {
@@ -56,17 +96,7 @@ impl Client {
             while let Some(next_char) = it.next() {
                 if msg_len == None {
                     msg_len_str.push(next_char);
-                    while let Some(nn) = it.next() {
-                        if nn != '\n' {
-                            msg_len_str.push(nn);
-                            continue;
-                        }
-
-                        let len_str = msg_len_str.split(":").last().unwrap_or("0");
-                        msg_len = Some(len_str.parse::<usize>().unwrap());
-                        msg_len_str.clear();
-                        break;
-                    }
+                    self._get_message_length(&mut it, &mut msg_len, &mut msg_len_str);
                     continue;
                 }
 
@@ -75,24 +105,8 @@ impl Client {
                     continue;
                 }
 
-                let mut values = [0; 3];
-                let mut i = 0;
-
                 let mut sit = stream_frame_string.chars().into_iter();
-                while let Some(nn) = sit.next() {
-                    if nn == ':' {
-                        let mut value_str = String::new();
-
-                        while let Some(nnn) = sit.next() {
-                            if nnn == ',' {
-                                break;
-                            }
-                            value_str.push(nnn);
-                        }
-                        values[i] = value_str.parse::<i32>().unwrap();
-                        i += 1;
-                    }
-                }
+                let values = self._get_values(&mut sit);
 
                 stream_frame_string.clear();
                 msg_len = None;
