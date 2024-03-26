@@ -32,7 +32,7 @@ impl Client {
         println!("Connected!");
 
         let mut buf = [0; 1024];
-        let mut msg_len = 0;
+        let mut msg_len = None;
         let mut msg_len_str = String::new();
         let mut stream_frame_string = String::new();
         loop {
@@ -54,21 +54,24 @@ impl Client {
             let mut it = string_buf.chars().into_iter();
 
             while let Some(next_char) = it.next() {
-                if msg_len == 0 {
+                if msg_len == None {
+                    msg_len_str.push(next_char);
                     while let Some(nn) = it.next() {
-                        if nn == '\n' {
-                            let len_str = msg_len_str.split(":").last().unwrap_or("0");
-                            msg_len = len_str.parse::<usize>().unwrap();
-                            msg_len_str.clear();
-                            break;
+                        if nn != '\n' {
+                            msg_len_str.push(nn);
+                            continue;
                         }
-                        msg_len_str += &nn.to_string();
+
+                        let len_str = msg_len_str.split(":").last().unwrap_or("0");
+                        msg_len = Some(len_str.parse::<usize>().unwrap());
+                        msg_len_str.clear();
+                        break;
                     }
                     continue;
                 }
 
-                if stream_frame_string.len() < msg_len {
-                    stream_frame_string += &next_char.to_string();
+                if stream_frame_string.len() < msg_len.unwrap() {
+                    stream_frame_string.push(next_char);
                     continue;
                 }
 
@@ -86,18 +89,13 @@ impl Client {
                             }
                             value_str.push(nnn);
                         }
-                        println!("{}", value_str.len());
-                        if value_str.len() == 0 {
-                            println!("{stream_frame_string}")
-                        }
-
                         values[i] = value_str.parse::<i32>().unwrap();
                         i += 1;
                     }
                 }
 
                 stream_frame_string.clear();
-                msg_len = 0;
+                msg_len = None;
                 cb(StreamFrameResult::new(values[0], values[1], values[2]));
             }
         }
@@ -110,8 +108,8 @@ fn main() {
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
 
     let _ = client.start(|frame: StreamFrameResult| {
-        // print!("\x1B[1;1H");
-        // io::stdout().flush().unwrap();
-        // print!("{:#?}", frame);
+        print!("\x1B[1;1H");
+        io::stdout().flush().unwrap();
+        print!("{:#?}", frame);
     });
 }
